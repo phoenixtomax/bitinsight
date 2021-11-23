@@ -8,6 +8,7 @@ import time
 import traceback
 from PySide2.QtWidgets import *
 from PySide2.QtCore import *
+from PySide2.QtGui import *
 import re
 
 #菜单 文件（打开、最近文件）|插件(加载，查阅文档)|关于
@@ -215,6 +216,8 @@ class TableViewer(QObject):
         self.widget.setHeaderLabels(['名字','值','长度(bits)'])
         self.widget.currentItemChanged.connect(self.__on_current_item_changed)
         self.widget.setContextMenuPolicy(QtCore.Qt.ActionsContextMenu)
+        self.widget.itemDoubleClicked.connect(self.__on_current_item_double_clicked)
+        self.picPopup = QLabel()
 
         self.__actions = []
         self.__add_action('添加到上下文', self.add_current_to_context)
@@ -250,6 +253,57 @@ class TableViewer(QObject):
         else:
             self.field_selected.emit(None, None)
 
+    def __on_current_item_double_clicked(self):
+        item = self.widget.currentItem()
+        
+        # Highlight
+        if self.__fields.__contains__(item):
+            (field, dockey) = self.__fields[item]
+            self.field_selected.emit(field, dockey)
+        else:
+            self.field_selected.emit(None, None)
+        
+        # Reaction to double click
+        if self.__fields.__contains__(item):
+            (field, dockey) = self.__fields[item]
+            
+            # Check bits count 
+            if ((field.end.bits_count() - field.begin.bits_count()) <= 0):
+                return
+            
+            # Check 'IsImage' Flag
+            name = field.name + "IsImage"
+            imageWidthName = field.name + "Width"
+            imageHeightName = field.name + "Height"
+            
+            isImage = False
+            imageWidth = 0
+            imageHeight = 0
+            
+            #print("type(field):", type(field), " field: ", field, " type(dockey):", type(dockey), " dockey: ", dockey)
+            for item in self.__fields:
+                (f, d) = self.__fields[item] 
+                if f.name == name:
+                    isImage = True
+                if f.name == imageHeightName:
+                    imageHeight = f.value
+                if f.name == imageWidthName:
+                    imageWidth = f.value
+                    
+            if not isImage:
+                return 
+             
+            l = list(field.value)
+            l = [ e * 255 for e in l]
+            v = bytearray(l)
+            
+            bitmap = QPixmap(QImage(v, imageWidth, imageHeight, QImage.Format_Grayscale8))
+            
+            bitmap = bitmap.scaledToHeight(imageHeight * 10)
+            self.picPopup.setPixmap(bitmap)
+        
+        self.picPopup.show()
+
     def add_current_to_context(self):
         item = self.widget.currentItem()
         if self.__fields.__contains__(item):
@@ -258,7 +312,6 @@ class TableViewer(QObject):
                 show_modal_error('字段值不支持加入到上下文中')
                 return
             self.add_field_to_context.emit(d)
-
 
     def __field_value_str(self,value):
         if type(value) == bytearray or type(value) == bytes:
@@ -537,7 +590,7 @@ class MainWnd(QMainWindow):
         for i in range(count):
             d = Table('root', self.context_viewer.get_context(), bs)
             try:
-                d.add_table(self.plugin.exports[parser])
+                d.add_table(self.plugin.exports[parser])                         ## Call the function of plugin
             except Exception as e:
                 if type(e) == EOFError:
                     show_modal_error('数据不足，请加载更多数据')

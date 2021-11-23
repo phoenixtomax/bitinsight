@@ -110,7 +110,7 @@ class BitStream:
         self._pos.step()
         return bit
 
-    def read_bits_to_array(self, count, forward=True):
+    def read_bits_to_array(self, count, forward=True, isbitArray=False):
         bits = bytearray()
         e = None
 
@@ -122,6 +122,9 @@ class BitStream:
                 e = EOFError()
                 break
             bits.append(self.read_a_bit())
+            
+        if isbitArray:
+            return bits
 
         if not forward:
             self._pos = pos
